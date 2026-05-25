@@ -824,7 +824,6 @@
                 }
 
                 // Convert workbook to CSV
-                const ws = workbook.worksheets[0];
                 const csvRows = [];
                 ws.eachRow({ includeEmpty: true }, (row) => {
                     const cells = [];
