@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jewellery DDP Pricing Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <style>
+        /* ── Animations ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        @keyframes slideDown {
+            from { opacity: 0; max-height: 0; }
+            to   { opacity: 1; max-height: 600px; }
+        }
+        @keyframes countUp {
+            from { opacity: 0; transform: scale(0.5); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+            50%      { box-shadow: 0 0 20px 6px rgba(34,197,94,0.15); }
+        }
+        @keyframes checkPop {
+            0%   { transform: scale(0) rotate(-45deg); opacity: 0; }
+            60%  { transform: scale(1.2) rotate(0deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes confettiFall {
+            0%   { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(60px) rotate(360deg); opacity: 0; }
+        }
+        @keyframes progressStripe {
+            0%   { background-position: 1rem 0; }
+            100% { background-position: 0 0; }
+        }
+        .anim-fade-up   { animation: fadeInUp 0.5s ease-out both; }
+        .anim-fade-up-1 { animation: fadeInUp 0.5s ease-out 0.1s both; }
+        .anim-fade-up-2 { animation: fadeInUp 0.5s ease-out 0.2s both; }
+        .anim-fade-up-3 { animation: fadeInUp 0.5s ease-out 0.3s both; }
+        .anim-fade-up-4 { animation: fadeInUp 0.5s ease-out 0.4s both; }
+        .anim-fade-in   { animation: fadeIn 0.4s ease-out both; }
+        .anim-slide-down { animation: slideDown 0.4s ease-out both; }
+        .anim-count      { animation: countUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        .anim-check      { animation: checkPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+        .shimmer-bg {
+            background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.4) 50%, transparent 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        /* Upload card hover lift */
+        .upload-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .upload-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1), 0 4px 10px -6px rgba(0,0,0,0.1);
+        }
+
+        /* Drop zone pulse */
+        .drop-zone {
+            transition: all 0.2s ease;
+        }
+        .drop-zone.drag-over {
+            background: #eff6ff !important;
+            border-color: #3b82f6 !important;
+            transform: scale(1.01);
+        }
+
+        /* Generate button glow when ready */
+        .btn-ready {
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        /* Stat card stagger */
+        .stat-card {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .stat-card.visible {
+            animation: fadeInUp 0.4s ease-out both;
+        }
+
+        /* Progress bar stripe animation */
+        .progress-animated {
+            background-image: linear-gradient(
+                45deg,
+                rgba(255,255,255,0.15) 25%, transparent 25%,
+                transparent 50%, rgba(255,255,255,0.15) 50%,
+                rgba(255,255,255,0.15) 75%, transparent 75%
+            );
+            background-size: 1rem 1rem;
+            animation: progressStripe 0.5s linear infinite;
+        }
+
+        /* File status entrance */
+        .file-status-enter {
+            animation: fadeInUp 0.3s ease-out both;
+        }
+
+        /* Success confetti container */
+        .confetti-piece {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            animation: confettiFall 1.2s ease-out both;
+        }
+
+        /* Smooth section reveal */
+        .section-reveal {
+            animation: fadeInUp 0.5s ease-out both;
+        }
+
+        /* Header gradient */
+        .header-gradient {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+        }
+
+        /* Subtle card border on hover */
+        .result-card {
+            transition: all 0.2s ease;
+        }
+        .result-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px -2px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-slate-100 min-h-screen">
+    <div class="min-h-screen flex flex-col">
+
+        <!-- Header -->
+        <header class="header-gradient text-white shadow-xl">
+            <div class="max-w-6xl mx-auto px-6 py-10">
+                <div class="flex items-center gap-4">
+                    <div class="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                        <svg class="h-10 w-10 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl md:text-4xl font-bold tracking-tight">Jewellery DDP Pricing Generator</h1>
+                        <p class="text-slate-300 mt-1 text-base md:text-lg">Upload product cost and DDP template to generate updated pricing</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
+
+            <!-- Step indicator -->
+            <div class="flex items-center justify-center gap-3 mb-10 anim-fade-up">
+                <div id="step1" class="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold transition-all duration-300">
+                    <span class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+                    Upload Files
+                </div>
+                <div class="w-8 h-px bg-gray-300"></div>
+                <div id="step2" class="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 text-gray-400 text-sm font-semibold transition-all duration-300">
+                    <span class="w-6 h-6 rounded-full bg-gray-300 text-white flex items-center justify-center text-xs font-bold">2</span>
+                    Generate
+                </div>
+                <div class="w-8 h-px bg-gray-300"></div>
+                <div id="step3" class="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 text-gray-400 text-sm font-semibold transition-all duration-300">
+                    <span class="w-6 h-6 rounded-full bg-gray-300 text-white flex items-center justify-center text-xs font-bold">3</span>
+                    Download
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div id="uploadSection" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                <!-- Product Cost File Upload -->
+                <div class="upload-card bg-white rounded-xl shadow-sm p-6 border-2 border-dashed border-gray-200 hover:border-blue-300">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-800">Product Cost File</h2>
+                            <p class="text-xs text-gray-500">From Pricing Tool</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="file" id="file1Input" accept=".xlsx,.xls" class="hidden" />
+                        <label for="file1Input" class="drop-zone block p-6 text-center cursor-pointer rounded-lg bg-gray-50 hover:bg-blue-50/50 transition-all border border-gray-200 hover:border-blue-200">
+                            <svg class="mx-auto h-10 w-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Drag and drop or <span class="text-blue-600 font-medium">browse</span></p>
+                            <p class="text-xs text-gray-400 mt-1">.xlsx files only</p>
+                        </label>
+                    </div>
+                    <div id="file1Status" class="mt-4 hidden">
+                        <div class="file-status-enter flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="h-5 w-5 text-emerald-500 anim-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <div>
+                                    <p id="file1NameDisplay" class="font-semibold text-emerald-800 text-sm truncate max-w-[200px] md:max-w-[280px]" title=""></p>
+                                    <p id="file1RowsDisplay" class="text-xs text-emerald-600"></p>
+                                </div>
+                            </div>
+                            <button onclick="clearFile1()" class="text-emerald-500 hover:text-emerald-700 transition p-1 rounded hover:bg-emerald-100">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="file1DeprecationNotice" class="mt-3 hidden">
+                        <div class="anim-slide-down bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p class="text-amber-800 text-xs leading-relaxed">
+                                <span class="text-base">🦕</span> <strong>Heads up!</strong> This is the old bulk upload format.
+                                We'll be deprecating this dinosaur soon! <span class="text-base">👋</span>
+                                <a href="https://productcatalog.onequince.com/bulk-upload" target="_blank" class="text-blue-600 underline font-semibold hover:text-blue-800">Switch to the new template</a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DDP Template Upload -->
+                <div class="upload-card bg-white rounded-xl shadow-sm p-6 border-2 border-dashed border-gray-200 hover:border-indigo-300">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                            <svg class="h-5 w-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M10 11h4"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-800">DDP Template</h2>
+                            <p class="text-xs text-gray-500">Previous Upload Template</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="file" id="file2Input" accept=".xlsx,.xls" class="hidden" />
+                        <label for="file2Input" class="drop-zone block p-6 text-center cursor-pointer rounded-lg bg-gray-50 hover:bg-indigo-50/50 transition-all border border-gray-200 hover:border-indigo-200">
+                            <svg class="mx-auto h-10 w-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Drag and drop or <span class="text-indigo-600 font-medium">browse</span></p>
+                            <p class="text-xs text-gray-400 mt-1">.xlsx files only</p>
+                        </label>
+                    </div>
+                    <div id="file2Status" class="mt-4 hidden">
+                        <div class="file-status-enter flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="h-5 w-5 text-emerald-500 anim-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <div>
+                                    <p id="file2NameDisplay" class="font-semibold text-emerald-800 text-sm truncate max-w-[200px] md:max-w-[280px]" title=""></p>
+                                    <p id="file2RowsDisplay" class="text-xs text-emerald-600"></p>
+                                </div>
+                            </div>
+                            <button onclick="clearFile2()" class="text-emerald-500 hover:text-emerald-700 transition p-1 rounded hover:bg-emerald-100">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <div class="flex justify-center mb-10">
+                <button id="generateBtn" onclick="generateDDP()" disabled
+                    class="group relative bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-3.5 px-10 rounded-xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl disabled:shadow-none">
+                    <span class="flex items-center gap-2">
+                        <svg class="h-5 w-5 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Generate DDP
+                    </span>
+                </button>
+            </div>
+
+            <!-- Processing Spinner -->
+            <div id="processingSpinner" class="hidden">
+                <div class="flex flex-col items-center justify-center py-12 anim-fade-in">
+                    <div class="relative">
+                        <div class="w-16 h-16 rounded-full border-4 border-blue-100"></div>
+                        <div class="absolute top-0 left-0 w-16 h-16 rounded-full border-4 border-transparent border-t-blue-600 animate-spin"></div>
+                    </div>
+                    <p class="text-gray-600 font-medium mt-5 text-lg">Processing your files...</p>
+                    <p class="text-gray-400 text-sm mt-1">Matching SKUs and updating costs</p>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden">
+                <!-- Success / partial banner -->
+                <div id="resultBanner" class="mb-6 section-reveal"></div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="stat-card result-card bg-white rounded-xl shadow-sm p-5 border border-gray-100" style="animation-delay:0.1s">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Product Cost</p>
+                        </div>
+                        <p id="statFile1Rows" class="text-3xl font-bold text-gray-800">0</p>
+                        <p class="text-xs text-gray-400 mt-1">filled rows</p>
+                    </div>
+                    <div class="stat-card result-card bg-white rounded-xl shadow-sm p-5 border border-gray-100" style="animation-delay:0.2s">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                            <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">DDP Template</p>
+                        </div>
+                        <p id="statFile2Rows" class="text-3xl font-bold text-gray-800">0</p>
+                        <p class="text-xs text-gray-400 mt-1">filled rows</p>
+                    </div>
+                    <div class="stat-card result-card bg-white rounded-xl shadow-sm p-5 border border-gray-100" style="animation-delay:0.3s">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Matched</p>
+                        </div>
+                        <p id="statMatched" class="text-3xl font-bold text-emerald-600">0</p>
+                        <p class="text-xs text-gray-400 mt-1">rows updated</p>
+                    </div>
+                    <div class="stat-card result-card bg-white rounded-xl shadow-sm p-5 border border-gray-100" style="animation-delay:0.4s">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                            <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Errors</p>
+                        </div>
+                        <p id="statErrors" class="text-3xl font-bold text-red-600">0</p>
+                        <p class="text-xs text-gray-400 mt-1">need attention</p>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100 section-reveal" style="animation-delay:0.3s">
+                    <div class="flex justify-between text-sm mb-2">
+                        <span class="text-gray-500 font-medium">Match Rate</span>
+                        <span id="matchPercent" class="font-bold text-gray-700">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                        <div id="statusFill" class="h-full rounded-full transition-all duration-1000 ease-out" style="width:0%"></div>
+                    </div>
+                </div>
+
+                <!-- Error Details Section -->
+                <div id="errorDetailsSection" class="hidden mb-6 section-reveal">
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-red-100">
+                        <button onclick="toggleErrorDetails()" class="w-full px-6 py-4 bg-red-50/50 hover:bg-red-50 flex items-center justify-between font-semibold text-red-700 transition-all">
+                            <span class="flex items-center gap-2">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span id="errorToggleLabel">Show Error Details</span>
+                            </span>
+                            <svg id="errorToggleIcon" class="h-4 w-4 transform transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="errorDetailsContent" class="hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-red-50/50 border-b border-red-100">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-red-700 font-semibold text-xs uppercase tracking-wider">Row</th>
+                                            <th class="px-4 py-3 text-left text-red-700 font-semibold text-xs uppercase tracking-wider">Style</th>
+                                            <th class="px-4 py-3 text-left text-red-700 font-semibold text-xs uppercase tracking-wider">SKU</th>
+                                            <th class="px-4 py-3 text-left text-red-700 font-semibold text-xs uppercase tracking-wider">Color</th>
+                                            <th class="px-4 py-3 text-left text-red-700 font-semibold text-xs uppercase tracking-wider">Size</th>
+                                            <th class="px-4 py-3 text-left text-red-700 font-semibold text-xs uppercase tracking-wider">Error</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="errorTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download Button -->
+                <div class="flex justify-center section-reveal" style="animation-delay:0.5s">
+                    <button id="downloadBtn" onclick="downloadDDP()"
+                        class="group relative bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold py-3.5 px-10 rounded-xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                        <span class="flex items-center gap-2">
+                            <svg class="h-5 w-5 transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download Updated DDP Template
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Spacer so content doesn't hide behind sticky footer -->
+        <div class="h-16"></div>
+
+        <!-- Sticky Footer -->
+        <footer class="fixed bottom-0 left-0 right-0 border-t border-gray-200/60 bg-white/80 backdrop-blur-md z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
+            <div class="max-w-6xl mx-auto px-6 py-3">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-2">
+                    <p class="text-gray-400 text-xs">Files are processed entirely in your browser. Nothing is uploaded to any server.</p>
+                    <div class="text-right">
+                        <p class="text-gray-500 text-xs font-medium">v1.2 &middot; 25 May 2026</p>
+                        <p class="text-gray-400 text-xs mt-0.5">Built by <strong class="text-gray-500">Akshay Goel</strong> &middot;
+                            <a href="mailto:akshay.goel@onequince.com" class="text-blue-500 hover:text-blue-600 transition">akshay.goel@onequince.com</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ── State ──
+        let file1Data = null;
+        let file1RawFile = null;
+        let file2RawFile = null;
+        let file1FilledRows = 0;
+        let file2FilledRows = 0;
+        let outputBlob = null;
+        let outputFileName = '';
+
+        // ── Expected columns for each file type ──
+        const PRODUCT_COST_MARKERS  = ['scenario name', 'material cost', 'crafting cost', 'variation level'];
+        const DDP_TEMPLATE_MARKERS  = ['partner code', 'direct product cost', 'duty type'];
+
+        // ── Drag & Drop ──
+        setupDragAndDrop('file1Input', handleFile1);
+        setupDragAndDrop('file2Input', handleFile2);
+        document.getElementById('file1Input').addEventListener('change', e => { if (e.target.files[0]) handleFile1(e.target.files[0]); });
+        document.getElementById('file2Input').addEventListener('change', e => { if (e.target.files[0]) handleFile2(e.target.files[0]); });
+
+        function setupDragAndDrop(inputId, handler) {
+            const input = document.getElementById(inputId);
+            const label = input.nextElementSibling;
+            ['dragenter','dragover','dragleave','drop'].forEach(ev => label.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false));
+            ['dragenter','dragover'].forEach(ev => label.addEventListener(ev, () => { label.classList.add('drag-over'); }));
+            ['dragleave','drop'].forEach(ev => label.addEventListener(ev, () => { label.classList.remove('drag-over'); }));
+            label.addEventListener('drop', e => { if (e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]); });
+        }
+
+        // ── Step indicator ──
+        function updateSteps(current) {
+            for (let i = 1; i <= 3; i++) {
+                const el = document.getElementById('step' + i);
+                const dot = el.querySelector('span');
+                if (i < current) {
+                    el.className = 'flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold transition-all duration-300';
+                    dot.className = 'w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold';
+                    dot.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
+                } else if (i === current) {
+                    el.className = 'flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold transition-all duration-300';
+                    dot.className = 'w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold';
+                    dot.textContent = i;
+                } else {
+                    el.className = 'flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 text-gray-400 text-sm font-semibold transition-all duration-300';
+                    dot.className = 'w-6 h-6 rounded-full bg-gray-300 text-white flex items-center justify-center text-xs font-bold';
+                    dot.textContent = i;
+                }
+            }
+        }
+
+        // ── Flexible header matching: "contains" instead of exact ──
+        function findCol(headers, keyword) {
+            const kw = keyword.toLowerCase();
+            let idx = headers.findIndex(h => String(h||'').toLowerCase().trim() === kw);
+            if (idx >= 0) return idx;
+            idx = headers.findIndex(h => String(h||'').toLowerCase().includes(kw));
+            return idx;
+        }
+
+        function headersContain(headers, keyword) {
+            const kw = keyword.toLowerCase();
+            return headers.some(h => String(h||'').toLowerCase().includes(kw));
+        }
+
+        function countFilledRows(data) {
+            let count = 0;
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0) continue;
+                const hasData = row.slice(0, 7).some(c => c !== undefined && c !== null && String(c).trim() !== '');
+                if (hasData) count++;
+            }
+            return count;
+        }
+
+        // ── File Handlers ──
+        function handleFile1(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    const headers = data[0] || [];
+
+                    const hasPCMarkers = PRODUCT_COST_MARKERS.every(m => headersContain(headers, m));
+                    const hasDDPMarkers = DDP_TEMPLATE_MARKERS.every(m => headersContain(headers, m));
+
+                    if (!hasPCMarkers) {
+                        if (hasDDPMarkers) {
+                            alert('Wrong file! This looks like a DDP Template, not a Product Cost file.\n\nPlease upload the Product Cost file (from Pricing Tool) here, and the DDP Template in the other slot.');
+                        } else {
+                            const missing = PRODUCT_COST_MARKERS.filter(m => !headersContain(headers, m));
+                            alert('This file is missing expected Product Cost columns:\n\n' + missing.map(m => '  - ' + m).join('\n') + '\n\nPlease check you uploaded the correct file.');
+                        }
+                        return;
+                    }
+
+                    const isOldBulkUpload = headers.some(h => /\[\s*(Non )?Updatable\s*\]/i.test(String(h || '')));
+
+                    file1Data = data;
+                    file1RawFile = file;
+                    file1FilledRows = countFilledRows(data);
+                    document.getElementById('file1Status').classList.remove('hidden');
+                    document.getElementById('file1NameDisplay').textContent = file.name;
+                    document.getElementById('file1NameDisplay').title = file.name;
+                    document.getElementById('file1RowsDisplay').textContent = file1FilledRows + ' filled rows' + (isOldBulkUpload ? ' (old format)' : '');
+
+                    const notice = document.getElementById('file1DeprecationNotice');
+                    if (isOldBulkUpload) { notice.classList.remove('hidden'); } else { notice.classList.add('hidden'); }
+
+                    updateGenerateButton();
+                    if (file1Data && file2RawFile) updateSteps(2);
+                } catch (err) { alert('Error reading Product Cost file: ' + err.message); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function handleFile2(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    const headers = data[0] || [];
+
+                    const hasDDPMarkers = DDP_TEMPLATE_MARKERS.every(m => headersContain(headers, m));
+                    const hasPCMarkers = PRODUCT_COST_MARKERS.every(m => headersContain(headers, m));
+
+                    if (!hasDDPMarkers) {
+                        if (hasPCMarkers) {
+                            alert('Wrong file! This looks like a Product Cost file, not a DDP Template.\n\nPlease upload the DDP Template here, and the Product Cost file in the other slot.');
+                        } else {
+                            const missing = DDP_TEMPLATE_MARKERS.filter(m => !headersContain(headers, m));
+                            alert('This file is missing expected DDP Template columns:\n\n' + missing.map(m => '  - ' + m).join('\n') + '\n\nPlease check you uploaded the correct file.');
+                        }
+                        return;
+                    }
+
+                    file2RawFile = file;
+                    file2FilledRows = countFilledRows(data);
+                    document.getElementById('file2Status').classList.remove('hidden');
+                    document.getElementById('file2NameDisplay').textContent = file.name;
+                    document.getElementById('file2NameDisplay').title = file.name;
+                    document.getElementById('file2RowsDisplay').textContent = file2FilledRows + ' filled rows';
+                    updateGenerateButton();
+                    if (file1Data && file2RawFile) updateSteps(2);
+                } catch (err) { alert('Error reading DDP Template: ' + err.message); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function clearFile1() {
+            file1Data = null; file1RawFile = null; file1FilledRows = 0;
+            document.getElementById('file1Input').value = '';
+            document.getElementById('file1Status').classList.add('hidden');
+            document.getElementById('file1DeprecationNotice').classList.add('hidden');
+            updateGenerateButton(); hideResults(); updateSteps(1);
+        }
+        function clearFile2() {
+            file2RawFile = null; file2FilledRows = 0;
+            document.getElementById('file2Input').value = '';
+            document.getElementById('file2Status').classList.add('hidden');
+            updateGenerateButton(); hideResults(); updateSteps(1);
+        }
+        function updateGenerateButton() {
+            const btn = document.getElementById('generateBtn');
+            const ready = !!(file1Data && file2RawFile);
+            btn.disabled = !ready;
+            if (ready) { btn.classList.add('btn-ready'); } else { btn.classList.remove('btn-ready'); }
+        }
+        function hideResults() {
+            document.getElementById('resultsSection').classList.add('hidden');
+        }
+
+        // ── Normalize helper ──
+        function norm(v) {
+            return String(v || '').replace(/"+/g, '"').replace(/"$/, '').trim().toLowerCase();
+        }
+
+        // ── Normalize Variation Level ──
+        function normVarLevel(v) {
+            const s = String(v || '').trim().toUpperCase();
+            if (s === 'ALL') return 'All';
+            if (s === 'COLOR' || s === 'BY COLOR') return 'By Color';
+            if (s === 'SIZE' || s === 'BY SIZE') return 'By Size';
+            if (s === 'VARIANT' || s === 'BY VARIANT') return 'By Variant';
+            return s;
+        }
+
+        // ── Lookup Builder ──
+        function buildLookup(file1Data) {
+            const headers = file1Data[0];
+
+            const vendorCodeIdx    = findCol(headers, 'vendor code');
+            const styleNumberIdx   = findCol(headers, 'style number');
+            const variationLvlIdx  = findCol(headers, 'variation level');
+            const skuIdx           = findCol(headers, 'sku');
+            const sizeIdx          = findCol(headers, 'size');
+            const colorIdx         = findCol(headers, 'color');
+            const materialCostIdx  = findCol(headers, 'material cost');
+            const craftingCostIdx  = findCol(headers, 'crafting cost');
+            const hardwareCostIdx  = findCol(headers, 'hardware cost');
+            const factoryOHIdx     = findCol(headers, 'factory oh cost');
+            const packagingCostIdx = findCol(headers, 'product packaging cost');
+
+            const required = { 'Vendor Code': vendorCodeIdx, 'Style Number': styleNumberIdx, 'Variation Level': variationLvlIdx,
+                'SKU': skuIdx, 'Material Cost': materialCostIdx,
+                'Crafting Cost': craftingCostIdx, 'Hardware Cost': hardwareCostIdx,
+                'Factory OH Cost': factoryOHIdx, 'Product Packaging Cost': packagingCostIdx };
+            const missing = Object.entries(required).filter(([k,v]) => v < 0).map(([k]) => k);
+            if (missing.length > 0) {
+                throw new Error('Product Cost file is missing columns: ' + missing.join(', '));
+            }
+            const bySKU = {}, byStyleColor = {}, byStyleSize = {}, byStyle = {}, variationLevel = {};
+            // Conflict trackers: store all distinct sumX values per key
+            const bySKU_all = {}, byStyleColor_all = {}, byStyleSize_all = {}, byStyle_all = {};
+            const pn = v => parseFloat(String(v||'0').replace(/[$,]/g,'').trim()) || 0;
+            const round2 = v => Math.round(v * 100) / 100;
+
+            for (let i = 1; i < file1Data.length; i++) {
+                const row = file1Data[i];
+                if (!row || row.length === 0) continue;
+
+                const vendor = String(row[vendorCodeIdx] || '').trim();
+                const style  = String(row[styleNumberIdx] || '').trim();
+                const sku    = String(row[skuIdx] || '').trim();
+                const color  = norm(row[colorIdx]);
+                const size   = norm(row[sizeIdx]);
+                const sumX = round2(pn(row[materialCostIdx]) + pn(row[craftingCostIdx]) + pn(row[hardwareCostIdx]) + pn(row[factoryOHIdx]) + pn(row[packagingCostIdx]));
+
+                if (sku) {
+                    if (bySKU[sku] === undefined) bySKU[sku] = sumX;
+                    if (!bySKU_all[sku]) bySKU_all[sku] = new Set();
+                    bySKU_all[sku].add(sumX);
+                }
+                const ck = style + '|' + color;
+                if (style && color) {
+                    if (byStyleColor[ck] === undefined) byStyleColor[ck] = sumX;
+                    if (!byStyleColor_all[ck]) byStyleColor_all[ck] = new Set();
+                    byStyleColor_all[ck].add(sumX);
+                }
+                const sk = style + '|' + size;
+                if (style && size) {
+                    if (byStyleSize[sk] === undefined) byStyleSize[sk] = sumX;
+                    if (!byStyleSize_all[sk]) byStyleSize_all[sk] = new Set();
+                    byStyleSize_all[sk].add(sumX);
+                }
+                if (style) {
+                    if (byStyle[style] === undefined) byStyle[style] = sumX;
+                    if (!byStyle_all[style]) byStyle_all[style] = new Set();
+                    byStyle_all[style].add(sumX);
+                }
+                const vk = vendor + '|' + style;
+                if (style && !variationLevel[vk]) variationLevel[vk] = normVarLevel(row[variationLvlIdx]);
+            }
+
+            // Build conflict maps: key → true if multiple DIFFERENT sumX values exist
+            const conflicts = {
+                bySKU: {}, byStyleColor: {}, byStyleSize: {}, byStyle: {}
+            };
+            Object.entries(bySKU_all).forEach(([k,s]) => { if (s.size > 1) conflicts.bySKU[k] = [...s]; });
+            Object.entries(byStyleColor_all).forEach(([k,s]) => { if (s.size > 1) conflicts.byStyleColor[k] = [...s]; });
+            Object.entries(byStyleSize_all).forEach(([k,s]) => { if (s.size > 1) conflicts.byStyleSize[k] = [...s]; });
+            Object.entries(byStyle_all).forEach(([k,s]) => { if (s.size > 1) conflicts.byStyle[k] = [...s]; });
+
+            return { bySKU, byStyleColor, byStyleSize, byStyle, variationLevel, conflicts };
+        }
+
+        // ── Row Matcher ──
+        function matchRow(lookup, partnerCode, style, sku, color, size) {
+            const { bySKU, byStyleColor, byStyleSize, byStyle, variationLevel, conflicts } = lookup;
+
+            // Step 1: SKU match (most precise)
+            if (sku && bySKU[sku] !== undefined) {
+                if (conflicts.bySKU[sku]) return { error: 'COST_CONFLICT: SKU ' + sku + ' has multiple costs across scenarios: $' + conflicts.bySKU[sku].join(', $') };
+                return { value: bySKU[sku], method: 'SKU match' };
+            }
+
+            const vk = partnerCode + '|' + style;
+            const varLevel = variationLevel[vk];
+
+            if (!varLevel) {
+                if (!byStyle[style] && !Object.keys(variationLevel).some(k => k.endsWith('|' + style))) {
+                    return { error: 'STYLE_NOT_IN_PRODUCT_COST: Style ' + style + ' not found for vendor ' + partnerCode };
+                }
+                return { error: 'VENDOR_STYLE_MISMATCH: Vendor ' + partnerCode + ' / Style ' + style + ' combination not in Product Cost file' };
+            }
+
+            if (varLevel === 'All') {
+                if (byStyle[style] !== undefined) {
+                    if (conflicts.byStyle[style]) return { error: 'COST_CONFLICT: Style ' + style + ' (All) has multiple costs: $' + conflicts.byStyle[style].join(', $') };
+                    return { value: byStyle[style], method: 'Style match (All)' };
+                }
+                return { error: 'STYLE_NOT_FOUND: Style ' + style + ' not in Product Cost' };
+            }
+            if (varLevel === 'By Color') {
+                const key = style + '|' + norm(color);
+                if (byStyleColor[key] !== undefined) {
+                    if (conflicts.byStyleColor[key]) return { error: 'COST_CONFLICT: Style ' + style + ' Color "' + color + '" has multiple costs: $' + conflicts.byStyleColor[key].join(', $') };
+                    return { value: byStyleColor[key], method: 'Style+Color match' };
+                }
+                return { error: 'COLOR_NOT_FOUND: Color "' + color + '" for style ' + style + ' not in Product Cost' };
+            }
+            if (varLevel === 'By Size') {
+                const key = style + '|' + norm(size);
+                if (byStyleSize[key] !== undefined) {
+                    if (conflicts.byStyleSize[key]) return { error: 'COST_CONFLICT: Style ' + style + ' Size "' + size + '" has multiple costs: $' + conflicts.byStyleSize[key].join(', $') };
+                    return { value: byStyleSize[key], method: 'Style+Size match' };
+                }
+                return { error: 'SIZE_NOT_FOUND: Size "' + size + '" for style ' + style + ' not in Product Cost' };
+            }
+            if (varLevel === 'By Variant') {
+                if (sku && bySKU[sku] !== undefined) {
+                    if (conflicts.bySKU[sku]) return { error: 'COST_CONFLICT: SKU ' + sku + ' has multiple costs: $' + conflicts.bySKU[sku].join(', $') };
+                    return { value: bySKU[sku], method: 'SKU match (By Variant)' };
+                }
+                return { error: 'SKU_NOT_FOUND: SKU ' + sku + ' for style ' + style + ' not in Product Cost' };
+            }
+            return { error: 'UNKNOWN_VARIATION_LEVEL: "' + varLevel + '" for style ' + style };
+        }
+
+        // ── Main Generate ──
+        async function generateDDP() {
+            const btn = document.getElementById('generateBtn');
+            const spinner = document.getElementById('processingSpinner');
+            btn.disabled = true;
+            btn.classList.remove('btn-ready');
+            spinner.classList.remove('hidden');
+            hideResults();
+
+            // Small delay so spinner renders
+            await new Promise(r => setTimeout(r, 100));
+
+            try {
+                const lookup = buildLookup(file1Data);
+
+                const file2Buffer = await file2RawFile.arrayBuffer();
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(file2Buffer);
+                const ws = workbook.worksheets[0];
+
+                const headerRow = ws.getRow(1);
+                const headerVals = [];
+                let maxCol = 0;
+                headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+                    headerVals.push({ col: colNumber, val: String(cell.value || '').toLowerCase().trim() });
+                    if (colNumber > maxCol) maxCol = colNumber;
+                });
+
+                function findWsCol(keyword) {
+                    const kw = keyword.toLowerCase();
+                    let found = headerVals.find(h => h.val === kw);
+                    if (found) return found.col;
+                    found = headerVals.find(h => h.val.includes(kw));
+                    return found ? found.col : 0;
+                }
+
+                const partnerCodeCol = findWsCol('partner code');
+                const styleCol       = findWsCol('style number');
+                const skuCol         = findWsCol('sku');
+                const colorCol       = findWsCol('color');
+                const sizeCol        = findWsCol('size');
+                const directCostCol  = findWsCol('direct product cost');
+
+                if (!directCostCol) throw new Error('Could not find "Direct Product Cost" column in DDP Template');
+                if (!partnerCodeCol) throw new Error('Could not find "Partner Code" column in DDP Template');
+                if (!styleCol) throw new Error('Could not find "Style Number" column in DDP Template');
+
+                const errorCol = maxCol + 1;
+                ws.getRow(1).getCell(errorCol).value = 'Processing Status';
+                ws.getRow(1).getCell(errorCol).font = { bold: true };
+
+                let matched = 0, errors = 0;
+                const errorRows = [];
+                const totalRows = ws.rowCount;
+                const redFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4E4' } };
+
+                for (let r = 2; r <= totalRows; r++) {
+                    const row = ws.getRow(r);
+                    const partner = String(row.getCell(partnerCodeCol).value || '').trim();
+                    const style   = String(row.getCell(styleCol).value || '').trim();
+                    const sku     = String(row.getCell(skuCol).value || '').trim();
+                    const color   = norm(row.getCell(colorCol).value);
+                    const size    = norm(row.getCell(sizeCol).value);
+
+                    if (!partner && !style && !sku) continue;
+
+                    const result = matchRow(lookup, partner, style, sku, color, size);
+
+                    if (result.error) {
+                        errors++;
+                        const errCell = row.getCell(errorCol);
+                        errCell.value = result.error;
+                        errCell.fill = redFill;
+                        errCell.font = { color: { argb: 'FFCC0000' } };
+                        errorRows.push({ rowNum: r, style, sku, color, size, error: result.error });
+                    } else {
+                        matched++;
+                        row.getCell(directCostCol).value = Math.round(result.value * 100) / 100;
+                    }
+                }
+
+                // Convert workbook to CSV
+                const ws = workbook.worksheets[0];
+                const csvRows = [];
+                ws.eachRow({ includeEmpty: true }, (row) => {
+                    const cells = [];
+                    row.eachCell({ includeEmpty: true }, (cell) => {
+                        let v = cell.value;
+                        if (v === null || v === undefined) v = '';
+                        else if (typeof v === 'object' && v.result !== undefined) v = v.result; // formula
+                        else if (typeof v === 'object' && v.text !== undefined) v = v.text; // rich text
+                        v = String(v);
+                        if (v.includes(',') || v.includes('"') || v.includes('\n')) {
+                            v = '"' + v.replace(/"/g, '""') + '"';
+                        }
+                        cells.push(v);
+                    });
+                    csvRows.push(cells.join(','));
+                });
+                const csvString = csvRows.join('\r\n');
+                const baseName = file2RawFile.name.replace(/\.[^/.]+$/, '');
+                outputFileName = 'Generated Output - ' + baseName + '.csv';
+                outputBlob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+
+                showResults(file1FilledRows, file2FilledRows, matched, errors, errorRows);
+                updateSteps(3);
+
+            } catch (err) {
+                alert('Error processing files: ' + err.message);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('hidden');
+            }
+        }
+
+        // ── Results Display ──
+        function showResults(f1Rows, f2Rows, matched, errors, errorRows) {
+            const section = document.getElementById('resultsSection');
+            section.classList.remove('hidden');
+
+            const total = matched + errors;
+            const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
+
+            // Animate stat cards in with stagger
+            document.querySelectorAll('.stat-card').forEach((card, i) => {
+                card.classList.remove('visible');
+                setTimeout(() => card.classList.add('visible'), 100 + i * 120);
+            });
+
+            // Animate numbers counting up
+            animateNumber('statFile1Rows', f1Rows, 400);
+            animateNumber('statFile2Rows', f2Rows, 500);
+            animateNumber('statMatched', matched, 600);
+            animateNumber('statErrors', errors, 700);
+
+            // Progress bar
+            setTimeout(() => {
+                document.getElementById('matchPercent').textContent = pct + '%';
+                const fill = document.getElementById('statusFill');
+                fill.style.width = pct + '%';
+                fill.className = 'h-full rounded-full transition-all duration-1000 ease-out progress-animated ' +
+                    (pct >= 95 ? 'bg-emerald-500' : pct >= 80 ? 'bg-amber-500' : 'bg-red-500');
+                // Stop stripe animation after fill completes
+                setTimeout(() => fill.classList.remove('progress-animated'), 1200);
+            }, 300);
+
+            // Result banner
+            const banner = document.getElementById('resultBanner');
+            if (errors === 0) {
+                banner.innerHTML = '<div class="relative bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4 overflow-hidden">' +
+                    '<div class="flex-shrink-0 w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">' +
+                    '<svg class="h-6 w-6 text-emerald-600 anim-check" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>' +
+                    '<div><p class="font-semibold text-emerald-800 text-lg">Perfect match!</p>' +
+                    '<p class="text-emerald-600 text-sm">All ' + matched + ' rows matched successfully. Your DDP template is ready to download.</p></div></div>';
+                spawnConfetti(banner);
+            } else {
+                banner.innerHTML = '<div class="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-center gap-4">' +
+                    '<div class="flex-shrink-0 w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">' +
+                    '<svg class="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>' +
+                    '<div><p class="font-semibold text-amber-800 text-lg">Partially matched</p>' +
+                    '<p class="text-amber-600 text-sm">' + matched + ' of ' + total + ' rows matched (' + pct + '%). ' + errors + ' rows need attention — see error details below.</p></div></div>';
+            }
+
+            // Error table
+            if (errors > 0) {
+                document.getElementById('errorDetailsSection').classList.remove('hidden');
+                const tbody = document.getElementById('errorTableBody');
+                tbody.innerHTML = '';
+                errorRows.forEach((err, i) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-red-50 hover:bg-red-50/50 transition-colors';
+                    tr.style.animation = 'fadeIn 0.3s ease-out ' + (i * 0.03) + 's both';
+                    tr.innerHTML =
+                        '<td class="px-4 py-2.5 font-mono text-red-600 text-xs">' + err.rowNum + '</td>' +
+                        '<td class="px-4 py-2.5 text-gray-700">' + escHtml(err.style) + '</td>' +
+                        '<td class="px-4 py-2.5 text-gray-700 font-mono text-xs">' + escHtml(err.sku) + '</td>' +
+                        '<td class="px-4 py-2.5 text-gray-600">' + escHtml(err.color) + '</td>' +
+                        '<td class="px-4 py-2.5 text-gray-600">' + escHtml(err.size) + '</td>' +
+                        '<td class="px-4 py-2.5 text-red-600 text-xs">' + escHtml(err.error) + '</td>';
+                    tbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById('errorDetailsSection').classList.add('hidden');
+            }
+
+            section.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ── Animate number counting up ──
+        function animateNumber(elementId, target, delay) {
+            const el = document.getElementById(elementId);
+            el.textContent = '0';
+            setTimeout(() => {
+                const duration = 600;
+                const start = performance.now();
+                function step(now) {
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+                    el.textContent = Math.round(eased * target);
+                    if (progress < 1) requestAnimationFrame(step);
+                }
+                requestAnimationFrame(step);
+            }, delay);
+        }
+
+        // ── Confetti on perfect match ──
+        function spawnConfetti(container) {
+            const colors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+            container.style.position = 'relative';
+            for (let i = 0; i < 24; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'confetti-piece';
+                piece.style.backgroundColor = colors[i % colors.length];
+                piece.style.left = (10 + Math.random() * 80) + '%';
+                piece.style.top = '-5px';
+                piece.style.animationDelay = (Math.random() * 0.6) + 's';
+                piece.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
+                piece.style.transform = 'rotate(' + (Math.random() * 360) + 'deg)';
+                container.querySelector('div').appendChild(piece);
+            }
+            // Clean up after animation
+            setTimeout(() => {
+                container.querySelectorAll('.confetti-piece').forEach(p => p.remove());
+            }, 2500);
+        }
+
+        function escHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s || '';
+            return div.innerHTML;
+        }
+
+        function toggleErrorDetails() {
+            const content = document.getElementById('errorDetailsContent');
+            const icon = document.getElementById('errorToggleIcon');
+            const label = document.getElementById('errorToggleLabel');
+            const isHidden = content.classList.toggle('hidden');
+            icon.classList.toggle('rotate-180');
+            label.textContent = isHidden ? 'Show Error Details' : 'Hide Error Details';
+        }
+
+        // ── Download ──
+        function downloadDDP() {
+            if (!outputBlob) return;
+            const url = URL.createObjectURL(outputBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = outputFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
