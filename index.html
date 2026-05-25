@@ -823,21 +823,23 @@
                     }
                 }
 
-                // Convert workbook to CSV
+                // Convert workbook to CSV — iterate by column index to preserve alignment for sparse rows
+                const totalCols = errorCol; // errorCol = maxCol + 1, already computed above
                 const csvRows = [];
                 ws.eachRow({ includeEmpty: true }, (row) => {
                     const cells = [];
-                    row.eachCell({ includeEmpty: true }, (cell) => {
+                    for (let c = 1; c <= totalCols; c++) {
+                        const cell = row.getCell(c);
                         let v = cell.value;
                         if (v === null || v === undefined) v = '';
-                        else if (typeof v === 'object' && v.result !== undefined) v = v.result; // formula
-                        else if (typeof v === 'object' && v.text !== undefined) v = v.text; // rich text
+                        else if (typeof v === 'object' && v.result !== undefined) v = v.result;
+                        else if (typeof v === 'object' && v.text !== undefined) v = v.text;
                         v = String(v);
                         if (v.includes(',') || v.includes('"') || v.includes('\n')) {
                             v = '"' + v.replace(/"/g, '""') + '"';
                         }
                         cells.push(v);
-                    });
+                    }
                     csvRows.push(cells.join(','));
                 });
                 const csvString = csvRows.join('\r\n');
