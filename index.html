@@ -861,9 +861,10 @@
                         return Math.round(computed * 100) / 100;
                     } catch (e) { return null; }
                 }
-                // Walk every cell. Refresh formula's cached result without breaking shared-formula structure.
-                ws.eachRow({ includeEmpty: false }, (row) => {
-                    row.eachCell({ includeEmpty: false }, (cell) => {
+                // Walk every cell. Recompute formulas and refresh valMap so chained
+                // formulas (J=I, K=J, etc.) pick up the new values left-to-right.
+                ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
+                    row.eachCell({ includeEmpty: false }, (cell, colNum) => {
                         let f = null;
                         const v = cell.value;
                         if (v && typeof v === 'object') {
@@ -881,6 +882,9 @@
                             const computed = evalSimpleFormula(f);
                             if (computed !== null) {
                                 cell.value = { formula: f, result: computed };
+                                // Refresh valMap so chained formulas (=I2, =J2, ...) see the fresh value
+                                const colLetter = ws.getColumn(colNum).letter;
+                                valMap[colLetter + rowNum] = computed;
                             }
                         }
                     });
