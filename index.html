@@ -834,9 +834,9 @@
                     }
                 }
 
-                // ── Re-evaluate formulas in JS so XLSX and CSV both contain freshly computed values
-                // (XLSX would otherwise ship with stale cached formula results in columns like Total Cost)
-                const cellValueMap = {};
+                // ── Formula recompute: refresh cached results so XLSX and CSV both show correct values
+                // (XLSX template otherwise ships with stale cached formula results in columns like Total Cost)
+                const valMap = {};
                 ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
                     row.eachCell({ includeEmpty: false }, (cell, colNum) => {
                         const colLetter = ws.getColumn(colNum).letter;
@@ -844,65 +844,56 @@
                         if (mv !== null && mv !== undefined && typeof mv === 'object') {
                             if (mv.result !== undefined) mv = mv.result;
                             else if (mv.text !== undefined) mv = mv.text;
+                            else if (mv.formula !== undefined || mv.sharedFormula !== undefined) mv = mv.result;
                         }
-                        cellValueMap[colLetter + rowNum] = mv;
+                        valMap[colLetter + rowNum] = mv;
                     });
                 });
-
-                function evalFormulaExpr(formula) {
+                function evalSimpleFormula(formulaStr) {
+                    if (typeof formulaStr !== 'string' || !formulaStr) return null;
                     try {
-                        if (typeof formula !== 'string' || !formula) return null;
-                        const expr = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, col, rowN) => {
-                            const val = cellValueMap[col + rowN];
-                            return (val !== undefined && val !== null && val !== '') ? Number(val) : 0;
+                        const expr = formulaStr.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, col, rowN) => {
+                            const v = valMap[col + rowN];
+                            return (v !== undefined && v !== null && v !== '') ? Number(v) : 0;
                         });
-                        const result = Function('"use strict"; return (' + expr + ')')();
-                        if (typeof result !== 'number' || !isFinite(result)) return null;
-                        return Math.round(result * 100) / 100;
-                    } catch (e) {
-                        return null;
-                    }
+                        const computed = Function('"use strict"; return (' + expr + ')')();
+                        if (typeof computed !== 'number' || !isFinite(computed)) return null;
+                        return Math.round(computed * 100) / 100;
+                    } catch (e) { return null; }
                 }
-
-                // Walk every cell; replace formula cells with their freshly computed numeric value
+                // Walk every cell. Refresh formula's cached result without breaking shared-formula structure.
                 ws.eachRow({ includeEmpty: false }, (row) => {
                     row.eachCell({ includeEmpty: false }, (cell) => {
-                        // Try every place ExcelJS might stash a formula string
                         let f = null;
-                        if (typeof cell.formula === 'string') {
-                            f = cell.formula;
-                        } else if (cell.value && typeof cell.value === 'object') {
-                            if (typeof cell.value.formula === 'string') {
-                                f = cell.value.formula;
-                            } else if (typeof cell.value.sharedFormula === 'string') {
-                                // sharedFormula holds the master cell ADDRESS (e.g. "J2"); look up master's formula
+                        const v = cell.value;
+                        if (v && typeof v === 'object') {
+                            if (typeof v.formula === 'string') f = v.formula;
+                            else if (typeof v.sharedFormula === 'string') {
                                 try {
-                                    const masterCell = ws.getCell(cell.value.sharedFormula);
-                                    if (masterCell) {
-                                        if (typeof masterCell.formula === 'string') {
-                                            f = masterCell.formula;
-                                        } else if (masterCell.value && typeof masterCell.value === 'object' && typeof masterCell.value.formula === 'string') {
-                                            f = masterCell.value.formula;
-                                        }
+                                    const master = ws.getCell(v.sharedFormula);
+                                    if (master && master.value && typeof master.value === 'object' && typeof master.value.formula === 'string') {
+                                        f = master.value.formula;
                                     }
                                 } catch (e) { /* ignore */ }
                             }
                         }
                         if (f) {
-                            const computed = evalFormulaExpr(f);
-                            if (computed !== null) cell.value = computed;
+                            const computed = evalSimpleFormula(f);
+                            if (computed !== null) {
+                                cell.value = { formula: f, result: computed };
+                            }
                         }
                     });
                 });
 
                 const baseName = file2RawFile.name.replace(/\.[^/.]+$/, '');
 
-                // ── XLSX output (formulas now replaced with plain numbers) ──
+                // ── XLSX output ──
                 const outBuffer = await workbook.xlsx.writeBuffer();
                 outputXlsxFileName = 'Generated Output - ' + baseName + '.xlsx';
                 outputXlsxBlob = new Blob([outBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-                // ── CSV output (same data, percentage-formatted where the cell format says so) ──
+                // ── CSV output (uses refreshed formula results) ──
                 function formatCellForCsv(cell) {
                     let v = cell.value;
                     if (v === null || v === undefined) return '';
@@ -919,9 +910,7 @@
                             const decimals = m ? m[1].length : 0;
                             return (v * 100).toFixed(decimals) + '%';
                         }
-                        // Two-decimal rounding to remove floating-point noise
-                        const rounded = Math.round(v * 100) / 100;
-                        return rounded.toString();
+                        return (Math.round(v * 100) / 100).toString();
                     }
                     return String(v);
                 }
@@ -938,9 +927,8 @@
                     }
                     csvRows.push(cells.join(','));
                 });
-                const csvString = csvRows.join('\r\n');
                 outputCsvFileName = 'Generated Output - ' + baseName + '.csv';
-                outputCsvBlob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                outputCsvBlob = new Blob([csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
 
                 showResults(file1FilledRows, file2FilledRows, matched, errors, errorRows);
                 updateSteps(3);
