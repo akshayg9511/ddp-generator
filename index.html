@@ -823,17 +823,52 @@
                     }
                 }
 
-                // Convert workbook to CSV — iterate by column index to preserve alignment for sparse rows
-                const totalCols = errorCol; // errorCol = maxCol + 1, already computed above
+                // Build cell value map so we can re-evaluate formulas against current values
+                const cellValueMap = {};
+                ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
+                    row.eachCell({ includeEmpty: false }, (cell, colNum) => {
+                        const colLetter = ws.getColumn(colNum).letter;
+                        let v = cell.value;
+                        if (v !== null && v !== undefined) {
+                            if (typeof v === 'object' && v.result !== undefined) v = v.result;
+                            else if (typeof v === 'object' && v.text !== undefined) v = v.text;
+                        }
+                        cellValueMap[colLetter + rowNum] = v;
+                    });
+                });
+
+                function evaluateFormula(formula) {
+                    try {
+                        const expr = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, col, row) => {
+                            const val = cellValueMap[col + row];
+                            return (val !== undefined && val !== null && val !== '') ? Number(val) : 0;
+                        });
+                        const result = Function('"use strict"; return (' + expr + ')')();
+                        return Math.round(result * 100) / 100;
+                    } catch (e) {
+                        return '';
+                    }
+                }
+
+                // Convert workbook to CSV — fixed column width + formula re-evaluation
+                const totalCols = errorCol;
                 const csvRows = [];
                 ws.eachRow({ includeEmpty: true }, (row) => {
                     const cells = [];
                     for (let c = 1; c <= totalCols; c++) {
                         const cell = row.getCell(c);
                         let v = cell.value;
-                        if (v === null || v === undefined) v = '';
-                        else if (typeof v === 'object' && v.result !== undefined) v = v.result;
-                        else if (typeof v === 'object' && v.text !== undefined) v = v.text;
+                        if (v === null || v === undefined) {
+                            v = '';
+                        } else if (typeof v === 'object' && v.formula !== undefined) {
+                            v = evaluateFormula(v.formula);
+                        } else if (typeof v === 'object' && v.result !== undefined) {
+                            v = Math.round(v.result * 100) / 100;
+                        } else if (typeof v === 'object' && v.text !== undefined) {
+                            v = v.text;
+                        } else if (typeof v === 'number') {
+                            v = Math.round(v * 100) / 100;
+                        }
                         v = String(v);
                         if (v.includes(',') || v.includes('"') || v.includes('\n')) {
                             v = '"' + v.replace(/"/g, '""') + '"';
