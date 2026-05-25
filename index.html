@@ -385,15 +385,24 @@
                     </div>
                 </div>
 
-                <!-- Download Button -->
-                <div class="flex justify-center section-reveal" style="animation-delay:0.5s">
-                    <button id="downloadBtn" onclick="downloadDDP()"
-                        class="group relative bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold py-3.5 px-10 rounded-xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                <!-- Download Buttons -->
+                <div class="flex flex-col sm:flex-row justify-center items-center gap-4 section-reveal" style="animation-delay:0.5s">
+                    <button id="downloadXlsxBtn" onclick="downloadXlsx()"
+                        class="group relative bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold py-3.5 px-8 rounded-xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl">
                         <span class="flex items-center gap-2">
                             <svg class="h-5 w-5 transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
-                            Download Updated DDP Template
+                            Download XLSX
+                        </span>
+                    </button>
+                    <button id="downloadCsvBtn" onclick="downloadCsv()"
+                        class="group relative bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3.5 px-8 rounded-xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                        <span class="flex items-center gap-2">
+                            <svg class="h-5 w-5 transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download CSV
                         </span>
                     </button>
                 </div>
@@ -426,8 +435,10 @@
         let file2RawFile = null;
         let file1FilledRows = 0;
         let file2FilledRows = 0;
-        let outputBlob = null;
-        let outputFileName = '';
+        let outputXlsxBlob = null;
+        let outputXlsxFileName = '';
+        let outputCsvBlob = null;
+        let outputCsvFileName = '';
 
         // ── Expected columns for each file type ──
         const PRODUCT_COST_MARKERS  = ['scenario name', 'material cost', 'crafting cost', 'variation level'];
@@ -823,64 +834,91 @@
                     }
                 }
 
-                // Build cell value map so we can re-evaluate formulas against current values
+                // ── Re-evaluate formulas in JS so XLSX and CSV both contain freshly computed values
+                // (XLSX would otherwise ship with stale cached formula results in columns like Total Cost)
                 const cellValueMap = {};
                 ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
                     row.eachCell({ includeEmpty: false }, (cell, colNum) => {
                         const colLetter = ws.getColumn(colNum).letter;
-                        let v = cell.value;
-                        if (v !== null && v !== undefined) {
-                            if (typeof v === 'object' && v.result !== undefined) v = v.result;
-                            else if (typeof v === 'object' && v.text !== undefined) v = v.text;
+                        let mv = cell.value;
+                        if (mv !== null && mv !== undefined && typeof mv === 'object') {
+                            if (mv.result !== undefined) mv = mv.result;
+                            else if (mv.text !== undefined) mv = mv.text;
                         }
-                        cellValueMap[colLetter + rowNum] = v;
+                        cellValueMap[colLetter + rowNum] = mv;
                     });
                 });
 
-                function evaluateFormula(formula) {
+                function evalFormulaExpr(formula) {
                     try {
-                        const expr = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, col, row) => {
-                            const val = cellValueMap[col + row];
+                        const expr = formula.replace(/\$?([A-Z]+)\$?(\d+)/g, (_, col, rowN) => {
+                            const val = cellValueMap[col + rowN];
                             return (val !== undefined && val !== null && val !== '') ? Number(val) : 0;
                         });
                         const result = Function('"use strict"; return (' + expr + ')')();
                         return Math.round(result * 100) / 100;
                     } catch (e) {
-                        return '';
+                        return null;
                     }
                 }
 
-                // Convert workbook to CSV — fixed column width + formula re-evaluation
+                // Walk every cell; replace formula cells with their freshly computed numeric value
+                ws.eachRow({ includeEmpty: false }, (row) => {
+                    row.eachCell({ includeEmpty: false }, (cell) => {
+                        const f = cell.formula; // ExcelJS resolves shared-formula slaves via this property
+                        if (f) {
+                            const computed = evalFormulaExpr(f);
+                            if (computed !== null) cell.value = computed;
+                        }
+                    });
+                });
+
+                const baseName = file2RawFile.name.replace(/\.[^/.]+$/, '');
+
+                // ── XLSX output (formulas now replaced with plain numbers) ──
+                const outBuffer = await workbook.xlsx.writeBuffer();
+                outputXlsxFileName = 'Generated Output - ' + baseName + '.xlsx';
+                outputXlsxBlob = new Blob([outBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+                // ── CSV output (same data, percentage-formatted where the cell format says so) ──
+                function formatCellForCsv(cell) {
+                    let v = cell.value;
+                    if (v === null || v === undefined) return '';
+                    if (typeof v === 'object') {
+                        if (v.result !== undefined) v = v.result;
+                        else if (v.text !== undefined) v = v.text;
+                        else if (v.richText !== undefined) v = v.richText.map(r => r.text).join('');
+                        else return '';
+                    }
+                    if (typeof v === 'number') {
+                        const numFmt = cell.numFmt || '';
+                        if (/%/.test(numFmt)) {
+                            const m = numFmt.match(/\.([0#]+)%/);
+                            const decimals = m ? m[1].length : 0;
+                            return (v * 100).toFixed(decimals) + '%';
+                        }
+                        // Two-decimal rounding to remove floating-point noise
+                        const rounded = Math.round(v * 100) / 100;
+                        return rounded.toString();
+                    }
+                    return String(v);
+                }
                 const totalCols = errorCol;
                 const csvRows = [];
                 ws.eachRow({ includeEmpty: true }, (row) => {
                     const cells = [];
                     for (let c = 1; c <= totalCols; c++) {
-                        const cell = row.getCell(c);
-                        let v = cell.value;
-                        if (v === null || v === undefined) {
-                            v = '';
-                        } else if (typeof v === 'object' && v.formula !== undefined) {
-                            v = evaluateFormula(v.formula);
-                        } else if (typeof v === 'object' && v.result !== undefined) {
-                            v = Math.round(v.result * 100) / 100;
-                        } else if (typeof v === 'object' && v.text !== undefined) {
-                            v = v.text;
-                        } else if (typeof v === 'number') {
-                            v = Math.round(v * 100) / 100;
+                        let out = formatCellForCsv(row.getCell(c));
+                        if (out.includes(',') || out.includes('"') || out.includes('\n')) {
+                            out = '"' + out.replace(/"/g, '""') + '"';
                         }
-                        v = String(v);
-                        if (v.includes(',') || v.includes('"') || v.includes('\n')) {
-                            v = '"' + v.replace(/"/g, '""') + '"';
-                        }
-                        cells.push(v);
+                        cells.push(out);
                     }
                     csvRows.push(cells.join(','));
                 });
                 const csvString = csvRows.join('\r\n');
-                const baseName = file2RawFile.name.replace(/\.[^/.]+$/, '');
-                outputFileName = 'Generated Output - ' + baseName + '.csv';
-                outputBlob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                outputCsvFileName = 'Generated Output - ' + baseName + '.csv';
+                outputCsvBlob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
 
                 showResults(file1FilledRows, file2FilledRows, matched, errors, errorRows);
                 updateSteps(3);
@@ -1021,18 +1059,20 @@
             label.textContent = isHidden ? 'Show Error Details' : 'Hide Error Details';
         }
 
-        // ── Download ──
-        function downloadDDP() {
-            if (!outputBlob) return;
-            const url = URL.createObjectURL(outputBlob);
+        // ── Downloads ──
+        function triggerDownload(blob, fileName) {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = outputFileName;
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+        function downloadXlsx() { triggerDownload(outputXlsxBlob, outputXlsxFileName); }
+        function downloadCsv()  { triggerDownload(outputCsvBlob, outputCsvFileName); }
     </script>
 </body>
 </html>
